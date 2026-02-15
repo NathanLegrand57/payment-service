@@ -37,7 +37,7 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
 
     if event["type"] == "payment_intent.succeeded":
         intent = event["data"]["object"]
-        payment = db.query(Payment).get(intent["id"])
+        payment = db.get(Payment, intent["id"])
         if payment and payment.status != "paid":
             payment.status = "paid"
             db.commit()

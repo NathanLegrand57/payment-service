@@ -25,8 +25,9 @@ def setup_db():
 
 @pytest.fixture
 def client(monkeypatch):
-    # Mock SessionLocal in routes
+    # Mock SessionLocal in routes and main
     monkeypatch.setattr(app.routes, "SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr("app.main.SessionLocal", TestingSessionLocal)
     # Mock auth verification
     fastapi_app.dependency_overrides[app.auth.verify_token] = lambda: True
     with TestClient(fastapi_app) as c:
@@ -67,3 +68,51 @@ def test_refund_payment_success(client, mocker):
 
     assert response.status_code == 200
     assert response.json()["status"] == "refunded"
+
+def test_stripe_webhook_success(client, mocker):
+    # Setup: create payment in DB
+    db = TestingSessionLocal()
+    from app.models import Payment
+    p = Payment(id="pi_mock_123", order_id="ORDER-200", amount=5000, currency="eur", status="created")
+    db.add(p)
+    db.commit()
+    db.close()
+
+    # Mock stripe.Webhook.construct_event
+    mock_event = {
+        "type": "payment_intent.succeeded",
+        "data": {
+            "object": {
+                "id": "pi_mock_123"
+            }
+        }
+    }
+    mocker.patch("stripe.Webhook.construct_event", return_value=mock_event)
+
+    # Call webhook
+    response = client.post(
+        "/webhook",
+        content="raw_payload",
+        headers={"stripe-signature": "fake_sig"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+
+    # Verify DB update
+    db = TestingSessionLocal()
+    updated_p = db.query(Payment).filter_by(id="pi_mock_123").first()
+    assert updated_p.status == "paid"
+    db.close()
+
+def test_stripe_webhook_invalid_signature(client, mocker):
+    import stripe
+    mocker.patch("stripe.Webhook.construct_event", side_effect=stripe.error.SignatureVerificationError("Invalid", "sig"))
+
+    response = client.post(
+        "/webhook",
+        headers={"stripe-signature": "invalid_sig"}
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid signature"

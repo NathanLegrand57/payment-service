@@ -31,7 +31,7 @@ jobs:
           JWT_SECRET: test_secret
           STRIPE_SECRET_KEY: sk_test_mock
         run: |
-          python -m pytest --cov=app --cov-report=xml:coverage.xml tests/test_api.py
+          python -m pytest --cov=app --cov-report=xml:coverage.xml tests/
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6

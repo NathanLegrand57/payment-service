@@ -1,5 +1,11 @@
 venv/
 __pycache__/
 .env
-payments.db
-test_payments.db
+*.db
+.coverage
+coverage.xml
+test_integration.db
+test_temp.db
+test.db
+tests/__pycache__/
+app/__pycache__/
